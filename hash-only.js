@@ -1,7 +1,6 @@
 var fs = require('fs');
 var jimp = require('jimp');
-
-let THRESHOLD = 0.1;
+var Promise = require('bluebird');
 
 function readdir(dir) {
   return new Promise(
@@ -15,27 +14,28 @@ function readdir(dir) {
   );
 }
 
-let filenames;
+function main(dir, threshold, concurrency) {
+  let filenames;
 
-readdir("images").then(
-  (files) => {
-    filenames = files;
-    return Promise.all(
-      files.map(
-        (f) => {
-          let h = (jimp.read("images/" + f)).hash();
-          console.log(h);
-          return h;
-        }
+  readdir(dir).then(
+    (files) => {
+      filenames = files;
+      return Promise.map(files,
+        (fd) => {
+          return jimp.read("images/" + fd).then( (im) => { return im.hash(); });
+        },
+        {"concurrency": concurrency}
       )
-    );
-  }
-).then (
-  (output) => {
-    console.log(output);
-  }
-).catch(
-  (err) => {
-    console.error(err);
-  }
-)
+    }
+  ).then (
+    (output) => {
+      console.log(output);
+    }
+  ).catch(
+    (err) => {
+      console.error(err);
+    }
+  )
+}
+
+main("images", 0.1, 100);
