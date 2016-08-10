@@ -1,7 +1,8 @@
 var fs = require('fs');
 var jimp = require('jimp');
-
-let THRESHOLD = 0.1;
+var Promise = require('bluebird');
+var hamming = require('hamming-distance');
+var sprintf = require("sprintf-js").sprintf ;
 
 function readdir(dir) {
   return new Promise(
@@ -15,46 +16,57 @@ function readdir(dir) {
   );
 }
 
-let filenames;
+function main(dir, threshold, concurrency) {
+  let filenames;
 
-readdir("images").then(
-  (files) => {
-    filenames = files;
-    return Promise.all(
-      files.map(
-        (f) => {
-          return jimp.read("images/" + f);
-        }
+  readdir(dir).then(
+    (files) => {
+      filenames = files;
+      return Promise.map(files,
+        (fd) => {
+          return jimp.read("images/" + fd).then( (im) => { return im.hash(); });
+        },
+        {"concurrency": concurrency}
       )
-    );
-  }
-).then(
-  (images) => {
-    let matches = [];
-    for(i = 0; i < images.length; i++) {
-      for(j = i+1; j < images.length; j++) {
-        let d = jimp.distance(images[i], images[j]);
-        if(d < THRESHOLD) {
-          if(matches[i] == undefined) {
-            matches[i] = new Array();
+    }
+  ).then(
+    (hashes) => {
+      let matches = [];
+      for(let i = 0; i < hashes.length; i++) {
+        matches[i] = {"name" : filenames[i]};
+        for(let j = i+1; j < hashes.length; j++) {
+          let distance = hamming(
+            new Buffer(hashes[i], "base64"),
+            new Buffer(hashes[j], "base64")
+          );
+
+          if(distance < threshold) {
+            if(matches[i].match === undefined)
+              matches[i].match = [];
+
+            matches[i].match.push(filenames[j]);
           }
-          matches[i].push(filenames[j]);
         }
       }
+      return matches;
     }
-    return Promise.resolve(matches);
-  }
-).then(
-  (matches) => {
-    let result = matches.filter((e) => {return e != undefined;}).map(
-      (array, idx) => {
-        return [filenames[idx], array.join(' ')].join(' ');
-      }
-    );
-    return Promise.resolve(result);
-  }
-).then (
-  (output) => {console.log(output);}
-).catch(
-  (err) => {console.error(err);}
-)
+  ).then (
+    (matches) => {
+      return matches
+        .filter( m => m.match )
+        .reduce( (acc, m) => {
+          return acc + sprintf("%s %s\n", m.name, m.match.join(' '));
+        }, "");
+    }
+  ).then (
+    (output) => {
+      console.log(output);
+    }
+  ).catch(
+    (err) => {
+      console.error(err);
+    }
+  )
+}
+
+main("small", 10, 100);

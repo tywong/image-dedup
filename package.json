@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "bluebird": "^3.4.1",
+    "hamming-distance": "^1.0.0",
     "jimp": "^0.2.24"
   }
 }
