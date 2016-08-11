@@ -14,7 +14,7 @@ function readdir(dir) {
   );
 }
 
-function main(dir, threshold, concurrency) {
+function main(dir, concurrency) {
   let filenames;
 
   readdir(dir).then(
@@ -22,14 +22,27 @@ function main(dir, threshold, concurrency) {
       filenames = files;
       return Promise.map(files,
         (fd) => {
-          return jimp.read("images/" + fd).then( (im) => { return im.hash(); });
+          return jimp.read(dir + "/" + fd).then( im => ({ "phash": im.hash(), "file": fd}) );
         },
         {"concurrency": concurrency}
       )
     }
   ).then (
+    (hashes) => {
+      return hashes.reduce(
+        (acc, elem) => {
+          if(!acc[elem.phash])
+            acc[elem.phash] = [];
+          acc[elem.phash].push(elem.file);
+          return acc;
+        }, []
+      );
+    }
+  ).then (
     (output) => {
-      console.log(output);
+      for(key in output) {
+        console.log(key + "\n" + output[key].join(' ') + "\n");
+      }
     }
   ).catch(
     (err) => {
@@ -38,4 +51,9 @@ function main(dir, threshold, concurrency) {
   )
 }
 
-main("images", 0.1, 100);
+if(process.argv.length < 2+1) {
+  console.error("Usage: [image directory]");
+  process.exit(1);
+}
+
+main(process.argv[2].trim(), 100);
